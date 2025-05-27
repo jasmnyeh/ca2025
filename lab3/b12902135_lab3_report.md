@@ -53,6 +53,19 @@ The selector bits are determined by the output of the Forwarding_Unit, which det
 ## Sign_Extend.v
 The Sign_Extend module takes a 12-bit immediate as input and sign-extends it to 32 bits. It does so by copying the sign bit (the 11th bit) into the upper 20 bits. This allows the immediate to be correctly interpreted as a signed 32-bit value during ALU operations.
 
+## branch_check.v
+Compares the actual branch result with the prediction; if they differ and the instruction is a branch, it triggers a pipeline flush and computes the correct next PC.
+
+## branch_predictor.v
+Implements a simple 2-bit branch prediction scheme, updating its prediction state based on past branch outcomes to guess whether future branches will be taken.
+
+## branch_result.v
+Determines if a branch should be taken by evaluating the branch condition (e.g., zero flag and branch signal).
+
+## branch_unit.v
+Calculates the branch target address and signals a flush if a branch is taken, based on the branch condition and prediction.
+flush: Controls pipeline flushing by selecting the correct PC and flush signals when a branch misprediction or pipeline hazard occurs.
+
 # Difficulties encountered and solutions in this lab
 I spent most of my time debugging a dumb mistake I made while typing. Since Forwarding Units require a larger multiplexer supporting four inputs and a two-bit selector, I naively copied the old version of the MUX32 module and added two more inputs, then forgot to adjust the size of the selector bits. My program didn’t crash even though the data I input was two bits for the selector register. Since the program ran and even passed the first test case, I was so confused about what went wrong. Then I used GTKWave to figure out the exact part that went wrong. I discovered that the output of my x16 register was wrong at cycle 6, so I traced it back to where the data was created—all the way to the ALU module’s inputs—and found that the output of the Forward A MUX was wrong! So I went back to the module, checked again, and finally discovered and fixed this stupid mistake that took me quite some time to debug. After that problem was solved, the system ran smoothly without any errors (at least based on the public test cases).
 
