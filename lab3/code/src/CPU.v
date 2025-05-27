@@ -38,11 +38,12 @@ wire [6:0]  funct7_i;
 wire [9:0]  funct_i;
 wire [11:0] imm12_i;
 wire [31:0] imm32_o;
-wire [31:0] ALUCtrl_o;
+wire [2:0]  ALUCtrl_o;
 
 // ALU
 wire [31:0] ALUdata_i;
 wire [31:0] ALUdata_o;
+wire        zero_o;
 
 // Data Memory
 wire [31:0] Memdata_o;
@@ -58,6 +59,7 @@ wire        p1_RegWrite_o;
 wire        p1_MemtoReg_o;
 wire        p1_MemRead_o;
 wire        p1_MemWrite_o;
+wire        p1_branch_o;
 
 wire [4:0]  p1_RS1addr_o;
 wire [4:0]  p1_RS2addr_o;
@@ -66,6 +68,7 @@ wire [31:0] p1_RS2data_o;
 wire [9:0]  p1_funct_o;
 wire [31:0] p1_imm32_o;
 wire [4:0]  p1_RDaddr_o;
+wire [31:0] p1_pc_o;
 
 // EX_MEM
 wire        p2_RegWrite_o;
@@ -94,9 +97,19 @@ wire        noop_o;
 wire        Stall_o;
 wire        PCWrite_o;
 
+// Branch Predictor
+wire predict_o;
+
 // Branch Unit
+wire        flush;
 wire        ID_FlushIF;
+wire        EX_FlushID;   
 wire [31:0] jump_addr_o;
+wire [31:0] p0_jump_addr_o;
+wire [31:0] p1_jump_addr_o;
+
+// Branch Result (EX stage)
+wire        branch_result_o;
 
 // Assigning instruction fields
 assign opcode_i   = p0_instr_o[6:0];    
@@ -112,6 +125,8 @@ assign imm12_i = (opcode_i == 7'b0100011) ? {p0_instr_o[31:25], p0_instr_o[11:7]
                  p0_instr_o[31:20]; // Default: I-type (e.g. lw, addi)
 
 initial begin
+    CPU.branch_predictor.history = 2'b11;
+
     // Hazard Detection Unit
     CPU.Hazard_Detection.Stall_o   = 1'b0;
     CPU.Hazard_Detection.NoOp_o    = 1'b0;
@@ -135,6 +150,8 @@ initial begin
     CPU.ID_EX.funct_o     = 10'b0;
     CPU.ID_EX.imm32_o     = 32'b0;
     CPU.ID_EX.RDaddr_o    = 5'b0;
+    CPU.ID_EX.PC_o        = 32'b0;
+    CPU.ID_EX.Branch_o    = 1'b0;
 
     // EX/MEM
     CPU.EX_MEM.ALUres_o     = 32'b0;
@@ -165,10 +182,19 @@ Control Control(
     .Branch_o(Branch_o)
 );
 
+Flush Flush(
+    .IFID_Flush_i(ID_FlushIF),
+    .IDEX_Flush_i(EX_FlushID),
+    .IFID_branch_PC_i(p0_jump_addr_o),
+    .IDEX_branch_PC_i(p1_jump_addr_o),
+    .IFID_Flush_o(flush),
+    .branch_PC_o(jump_addr_o)
+);
+
 MUX32 MUX_PC(
     .data1_i(adder_pc_o),
     .data2_i(jump_addr_o),
-    .select_i(ID_FlushIF),
+    .select_i(flush),
     .data_o(pc_i)
 );
 
@@ -219,7 +245,8 @@ ALU ALU(
     .data1_i(ForwardAdata_o),
     .data2_i(ALUdata_i),
     .ALUCtrl_i(ALUCtrl_o),
-    .data_o(ALUdata_o)
+    .data_o(ALUdata_o),
+    .zero_o(zero_o)
 );
 
 ALU_Control ALU_Control(
@@ -247,7 +274,7 @@ MUX32 MUX_WriteSrc(
 IF_ID IF_ID(
     .clk_i(clk_i),
     .Stall_i(Stall_o),
-    .Flush_i(ID_FlushIF),
+    .flush_i(flush),
     .instr_i(instr_o),
     .pc_i(pc_o),
     .instr_o(p0_instr_o),
@@ -256,7 +283,10 @@ IF_ID IF_ID(
 
 ID_EX ID_EX(
     .clk_i(clk_i),
+    .flush_i(EX_FlushID),
 
+    .Branch_i(Branch_o),
+    .PC_i(p0_pc_o),
     .ALUOp_i(ALUOp_o),
     .ALUSrc_i(ALUSrc_o),
     .RegWrite_i(RegWrite_o),
@@ -272,6 +302,8 @@ ID_EX ID_EX(
     .imm32_i(imm32_o),
     .RDaddr_i(RDaddr_i),
 
+    .Branch_o(p1_branch_o),
+    .PC_o(p1_pc_o),
     .ALUOp_o(p1_ALUOp_o),
     .ALUSrc_o(p1_ALUSrc_o),
     .RegWrite_o(p1_RegWrite_o),
@@ -362,15 +394,39 @@ Hazard_Detection Hazard_Detection(
     .PCWrite_o(PCWrite_o)
 );
 
+Branch_Result Branch_Result(
+    .zero_i(zero_o),
+    .branch_i(p1_branch_o),
+    .result_o(branch_result_o)
+);
+
+Branch_Predictor branch_predictor(
+    .clk_i(clk_i),
+    .rst_i(rst_i),
+    .Branch_i(p1_branch_o),
+    .update_i(branch_result_o),
+    .result_i(predict_o),
+    .predict_o(predict_o)
+);
+
+Branch_Check Branch_Check(
+    .Branch_i(p1_branch_o),
+    .branch_result_i(branch_result_o),
+    .predict_i(predict_o),
+    .Imm_i(p1_imm32_o),
+    .PC_i(p1_pc_o),
+    .Flush_o(EX_FlushID),
+    .PC_o(p1_jump_addr_o)
+);
+
 Branch_Unit Branch_Unit(
-    .RS1data_i(RS1data_o),
-    .RS2data_i(RS2data_o),
     .Branch_i(Branch_o),
+    .predict_i(predict_o),
     .ID_pc_i(p0_pc_o),
     .imm32_i(imm32_o),
     
     .Flush_o(ID_FlushIF),
-    .jump_addr_o(jump_addr_o)
+    .jump_addr_o(p0_jump_addr_o)
 );
 
 endmodule

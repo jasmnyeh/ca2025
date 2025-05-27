@@ -1,7 +1,10 @@
 module ID_EX
 (
     clk_i,
+    flush_i,
 
+    PC_i,
+    Branch_i,
     ALUOp_i,
     ALUSrc_i,
     RegWrite_i,
@@ -17,6 +20,8 @@ module ID_EX
     imm32_i,
     RDaddr_i,
 
+    PC_o,
+    Branch_o,
     ALUOp_o,
     ALUSrc_o,
     RegWrite_o,
@@ -35,6 +40,9 @@ module ID_EX
 
 // Ports
 input               clk_i;
+input               flush_i;
+input   [31:0]      PC_i;
+input               Branch_i;  
 input   [1:0]       ALUOp_i;
 input               ALUSrc_i;
 input               RegWrite_i;
@@ -51,6 +59,8 @@ input   [31:0]      imm32_i;
 input   [4:0]       RDaddr_i;
 
 output  [1:0]       ALUOp_o;
+output  [31:0]      PC_o;
+output              Branch_o;  
 output              ALUSrc_o;
 output              RegWrite_o;
 output              MemtoReg_o;
@@ -65,6 +75,8 @@ output  [9:0]       funct_o;
 output  [31:0]      imm32_o;
 output  [4:0]       RDaddr_o;
 
+reg                 Branch_o;
+reg     [31:0]      PC_o;
 reg     [1:0]       ALUOp_o;
 reg                 ALUSrc_o;
 reg                 RegWrite_o;
@@ -80,6 +92,8 @@ reg     [31:0]      imm32_o;
 reg     [4:0]       RDaddr_o;
 
 always@(posedge clk_i) begin
+    Branch_o <= Branch_i;
+    PC_o <= PC_i;
     ALUOp_o <= ALUOp_i;
     ALUSrc_o <= ALUSrc_i;
     RegWrite_o <= RegWrite_i;
@@ -93,8 +107,23 @@ always@(posedge clk_i) begin
     funct_o <= funct_i;
     imm32_o <= imm32_i;
     RDaddr_o <= RDaddr_i;
+    if (flush_i) begin
+        RegWrite_o <= 0;
+        MemtoReg_o <= 0;
+        MemRead_o <= 0;
+        MemWrite_o <= 0;
+        Branch_o <= 0;
+        ALUOp_o <= 2'b0;
+        ALUSrc_o <= 0;
+        RS1data_o <= 32'b0;
+        RS2data_o <= 32'b0;
+        RS1addr_o <= 5'b0;
+        RS2addr_o <= 5'b0;
+        imm32_o <= 32'b0;
+        funct_o <= 10'b0;
+        RDaddr_o <= 5'b0;
+        PC_o <= 32'b0;
+    end
 end
 
 endmodule
-
-// check ??!!

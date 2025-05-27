@@ -3,7 +3,8 @@ module ALU
     data1_i,
     data2_i,
     ALUCtrl_i,
-    data_o
+    data_o,
+    zero_o
 );
 
 // Ports
@@ -11,8 +12,11 @@ input  [31:0] data1_i;
 input  [31:0] data2_i;
 input  [2:0]  ALUCtrl_i;
 output [31:0] data_o;
+output        zero_o;
 
 reg [31:0] data_o;
+
+assign zero_o = (data1_i - data2_i == 0) ? 1: 0;
 
 always @(*) begin
     case (ALUCtrl_i)
