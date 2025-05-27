@@ -38,7 +38,7 @@ wire [6:0]  funct7_i;
 wire [9:0]  funct_i;
 wire [11:0] imm12_i;
 wire [31:0] imm32_o;
-wire [31:0] ALUCtrl_o;
+wire [2:0]  ALUCtrl_o;
 
 // ALU
 wire [31:0] ALUdata_i;
