@@ -48,7 +48,7 @@ wire [31:0] ALUdata_o;
 wire [31:0] Memdata_o;
 
 // IF_ID
-wire [31:0] p0_pc_o;
+wire [31:0] p0_pc_o; // for branching addr calculation
 wire [31:0] p0_instr_o;
 
 // ID_EX
@@ -94,9 +94,22 @@ wire        noop_o;
 wire        Stall_o;
 wire        PCWrite_o;
 
-// Branch Unit
-wire        ID_FlushIF;
-wire [31:0] jump_addr_o;
+// Branch predictor
+wire [31:0] jump_addr_o; // CHANGE
+wire [31:0] IF_pc_mux_i; // ok
+
+wire        predictor;
+wire        EX_Branching;
+wire        EX_last_flush;
+wire        EX_BEQ_flush; // indicate flush from beq
+wire [31:0] EX_TargetPC;
+wire [31:0] PC_ID_BranchingTarget;
+wire [31:0] EX_pc;
+
+assign EX_BEQ_flush = (!EX_last_flush && EX_Branching && (EX_ALU_toRegEXMEM == 0)) || (EX_last_flush && EX_Branching && (EX_ALU_toRegEXMEM != 0));
+    //EX_Branching indicates last is branching instr. EX last didn't flush, but actually branch is taken.
+    // or another case: taken branch, branch resolve result is nontaken
+// end
 
 // Assigning instruction fields
 assign opcode_i   = p0_instr_o[6:0];    
@@ -165,12 +178,12 @@ Control Control(
     .Branch_o(Branch_o)
 );
 
-MUX32 MUX_PC(
-    .data1_i(adder_pc_o),
-    .data2_i(jump_addr_o),
-    .select_i(ID_FlushIF),
-    .data_o(pc_i)
-);
+// MUX32 MUX_PC(
+//     .data1_i(adder_pc_o),
+//     .data2_i(jump_addr_o),
+//     .select_i(CHANGE),
+//     .data_o(pc_i)
+// );
 
 Adder Add_PC(
     .data1_i(pc_o),
@@ -182,7 +195,7 @@ PC PC(
     .clk_i(clk_i),
     .rst_i(rst_i),
     .PCWrite_i(PCWrite_o),
-    .pc_i(pc_i),
+    .pc_i(IF_pc_mux_i),
     .pc_o(pc_o)
 );
 
@@ -247,7 +260,7 @@ MUX32 MUX_WriteSrc(
 IF_ID IF_ID(
     .clk_i(clk_i),
     .Stall_i(Stall_o),
-    .Flush_i(ID_FlushIF),
+    .Flush_i((Branch_o && predictor) || EX_BEQ_flush),
     .instr_i(instr_o),
     .pc_i(pc_o),
     .instr_o(p0_instr_o),
@@ -256,7 +269,12 @@ IF_ID IF_ID(
 
 ID_EX ID_EX(
     .clk_i(clk_i),
+    .flush(EX_BEQ_flush),
 
+    .pc_i(p0_pc_o),
+    .target_PC_i(p0_pc_o + ((ID_ImmGen_toRegIDEX) << 1)),
+    .Branch_i(Branch_o),
+    .last_flush_i(Branch_o && predictor),
     .ALUOp_i(ALUOp_o),
     .ALUSrc_i(ALUSrc_o),
     .RegWrite_i(RegWrite_o),
@@ -272,6 +290,10 @@ ID_EX ID_EX(
     .imm32_i(imm32_o),
     .RDaddr_i(RDaddr_i),
 
+    .Branch_o(EX_Branching),
+    .last_flush_o(EX_last_flush),
+    .pc_o(EX_pc),
+    .targetPC_o(EX_TargetPC),
     .ALUOp_o(p1_ALUOp_o),
     .ALUSrc_o(p1_ALUSrc_o),
     .RegWrite_o(p1_RegWrite_o),
@@ -362,16 +384,28 @@ Hazard_Detection Hazard_Detection(
     .PCWrite_o(PCWrite_o)
 );
 
-Branch_Unit Branch_Unit(
-    .RS1data_i(RS1data_o),
-    .RS2data_i(RS2data_o),
-    .Branch_i(Branch_o),
-    .ID_pc_i(p0_pc_o),
-    .imm32_i(imm32_o),
-    
-    .Flush_o(ID_FlushIF),
-    .jump_addr_o(jump_addr_o)
+MUX32 PC_ID_Branching(
+    .data1_i(IF_pc_i),
+    .data2_i(p0_pc_o + ((ID_ImmGen_toRegIDEX) << 1)),
+    .select_i(Branch_o && predictor),
+    .data_o(PC_ID_BranchingTarget)
 );
+
+MUX32 PC_EX_Branching(
+    .data1_i(PC_ID_BranchingTarget),
+    .data2_i((EX_ALU_toRegEXMEM == 0) ? EX_TargetPC : EX_pc + 4),
+    .select_i(EX_BEQ_flush),
+    .data_o(IF_pc_mux_i)
+);
+
+branch_predictor branch_predictor
+(
+    .clk_i(clk_i), 
+    .rst_i(rst_i),
+    .update_i(Branch_o), // Update only for branch instructions
+    .result_i(EX_ALU_toRegEXMEM == 0), 
+    .predict_o(predictor)
+)
 
 endmodule
 
