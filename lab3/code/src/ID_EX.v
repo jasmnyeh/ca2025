@@ -100,6 +100,10 @@ reg     [31:0]      RS2data_o;
 reg     [9:0]       funct_o;
 reg     [31:0]      imm32_o;
 reg     [4:0]       RDaddr_o;
+reg                 Branch_o;
+reg                 last_flush_o;
+reg     [31:0]      target_PC_o;
+reg     [31:0]      pc_o;
 
 always@(posedge clk_i) begin
     if (flush) begin

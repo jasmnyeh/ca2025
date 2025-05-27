@@ -38,7 +38,7 @@ wire [6:0]  funct7_i;
 wire [9:0]  funct_i;
 wire [11:0] imm12_i;
 wire [31:0] imm32_o;
-wire [31:0] ALUCtrl_o;
+wire [2:0] ALUCtrl_o;
 
 // ALU
 wire [31:0] ALUdata_i;
@@ -178,13 +178,6 @@ Control Control(
     .Branch_o(Branch_o)
 );
 
-// MUX32 MUX_PC(
-//     .data1_i(adder_pc_o),
-//     .data2_i(jump_addr_o),
-//     .select_i(CHANGE),
-//     .data_o(pc_i)
-// );
-
 Adder Add_PC(
     .data1_i(pc_o),
     .data2_i(32'd4),
@@ -260,7 +253,7 @@ MUX32 MUX_WriteSrc(
 IF_ID IF_ID(
     .clk_i(clk_i),
     .Stall_i(Stall_o),
-    .Flush_i((Branch_o && predictor) || EX_BEQ_flush),
+    .flush_i((Branch_o && predictor) || EX_BEQ_flush),
     .instr_i(instr_o),
     .pc_i(pc_o),
     .instr_o(p0_instr_o),
@@ -293,7 +286,7 @@ ID_EX ID_EX(
     .Branch_o(EX_Branching),
     .last_flush_o(EX_last_flush),
     .pc_o(EX_pc),
-    .targetPC_o(EX_TargetPC),
+    .target_PC_o(EX_TargetPC),
     .ALUOp_o(p1_ALUOp_o),
     .ALUSrc_o(p1_ALUSrc_o),
     .RegWrite_o(p1_RegWrite_o),
@@ -385,7 +378,7 @@ Hazard_Detection Hazard_Detection(
 );
 
 MUX32 PC_ID_Branching(
-    .data1_i(IF_pc_i),
+    .data1_i(adder_pc_o),
     .data2_i(p0_pc_o + ((ID_ImmGen_toRegIDEX) << 1)),
     .select_i(Branch_o && predictor),
     .data_o(PC_ID_BranchingTarget)
@@ -405,7 +398,6 @@ branch_predictor branch_predictor
     .update_i(Branch_o), // Update only for branch instructions
     .result_i(EX_ALU_toRegEXMEM == 0), 
     .predict_o(predictor)
-)
+);
 
 endmodule
-

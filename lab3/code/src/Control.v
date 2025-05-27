@@ -24,59 +24,44 @@ output       MemRead_o;
 output       MemWrite_o;
 output       Branch_o;
 
-reg [1:0] ALUOp_o;
-reg       ALUSrc_o;
-reg       RegWrite_o;
-reg       MemtoReg_o;
-reg       MemRead_o;
-reg       MemWrite_o;
-reg       Branch_o;
+// reg [1:0] ALUOp_o;
+// reg       ALUSrc_o;
+// reg       RegWrite_o;
+// reg       MemtoReg_o;
+// reg       MemRead_o;
+// reg       MemWrite_o;
+// reg       Branch_o;
 
 // updates happen whenever any input in the sensitivity list changes
-always @(*) begin  
-    // Default values (safe for NoOp and undefined opcodes)
-    ALUOp_o     = 2'b00;
-    ALUSrc_o    = 0;
-    RegWrite_o  = 0;
-    MemtoReg_o  = 0;
-    MemRead_o   = 0;
-    MemWrite_o  = 0;
-    Branch_o    = 0;
+assign ALUOp_o    = (noop_i)                ? 2'b00 :
+                    (opcode_i == 7'b0110011) ? 2'b10 : // R-type
+                    (opcode_i == 7'b1100011) ? 2'b01 : // beq
+                                               2'b00;  // others
 
-    if (!noop_i) begin
-        case (opcode_i)
-            7'b0110011: begin // R-type
-                ALUOp_o    = 2'b10;
-                ALUSrc_o   = 0;
-                RegWrite_o = 1;
-            end
+assign ALUSrc_o   = (noop_i)                ? 1'b0  :
+                    (opcode_i == 7'b0110011) ? 1'b0  : // R-type
+                                               (opcode_i != 7'b1100011); // all but beq
 
-            7'b0010011: begin // I-type
-                ALUOp_o    = 2'b00;
-                ALUSrc_o   = 1;
-                RegWrite_o = 1;
-            end
+assign RegWrite_o = (noop_i)                ? 1'b0  :
+                    (opcode_i == 7'b0110011) ? 1'b1  : // R-type
+                    (opcode_i == 7'b0010011) ? 1'b1  : // I-type
+                    (opcode_i == 7'b0000011) ? 1'b1  : // lw
+                                               1'b0;
 
-            7'b0000011: begin // lw
-                ALUOp_o     = 2'b00;
-                ALUSrc_o    = 1;
-                RegWrite_o  = 1;
-                MemtoReg_o  = 1;
-                MemRead_o   = 1;
-            end
+assign MemtoReg_o = (noop_i)                ? 1'b0  :
+                    (opcode_i == 7'b0000011) ? 1'b1  : // lw
+                                               1'b0;
 
-            7'b0100011: begin // sw
-                ALUOp_o     = 2'b00;
-                ALUSrc_o    = 1;
-                MemWrite_o  = 1;
-            end
+assign MemRead_o  = (noop_i)                ? 1'b0  :
+                    (opcode_i == 7'b0000011) ? 1'b1  : // lw
+                                               1'b0;
 
-            7'b1100011: begin // beq
-                ALUOp_o     = 2'b01;
-                Branch_o    = 1;
-            end
-        endcase
-    end
-end
+assign MemWrite_o = (noop_i)                ? 1'b0  :
+                    (opcode_i == 7'b0100011) ? 1'b1  : // sw
+                                               1'b0;
+
+assign Branch_o   = (noop_i)                ? 1'b0  :
+                    (opcode_i == 7'b1100011) ? 1'b1  : // beq
+                                               1'b0;
 
 endmodule

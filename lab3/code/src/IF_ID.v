@@ -3,7 +3,7 @@ module IF_ID
     clk_i,
 
     Stall_i,
-    Flush_i,
+    flush_i,
     instr_i,
     pc_i,
 
@@ -14,7 +14,7 @@ module IF_ID
 // Ports
 input        clk_i;
 input        Stall_i;
-input        Flush_i;
+input        flush_i;
 input [31:0] pc_i;
 input [31:0] instr_i;
 
@@ -22,7 +22,7 @@ output reg [31:0] pc_o;
 output reg [31:0] instr_o;
 
 always @(posedge clk_i) begin
-    if (Flush_i) begin
+    if (flush_i) begin
         pc_o    <= 32'b0;
         instr_o <= 32'b0;
     end
