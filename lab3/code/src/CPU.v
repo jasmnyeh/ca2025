@@ -106,8 +106,8 @@ wire [31:0] EX_TargetPC;
 wire [31:0] PC_ID_BranchingTarget;
 wire [31:0] EX_pc;
 
-assign EX_BEQ_flush = (!EX_last_flush && EX_Branching && (EX_ALU_toRegEXMEM == 0)) || (EX_last_flush && EX_Branching && (EX_ALU_toRegEXMEM != 0));
-    //EX_Branching indicates last is branching instr. EX last didn't flush, but actually branch is taken.
+assign EX_BEQ_flush = (!EX_last_flush && EX_Branching && (ALUdata_o == 0)) || (EX_last_flush && EX_Branching && (ALUdata_o != 0));
+    // EX_Branching indicates last is branching instr. EX last didn't flush, but actually branch is taken.
     // or another case: taken branch, branch resolve result is nontaken
 // end
 
@@ -148,6 +148,10 @@ initial begin
     CPU.ID_EX.funct_o     = 10'b0;
     CPU.ID_EX.imm32_o     = 32'b0;
     CPU.ID_EX.RDaddr_o    = 5'b0;
+    CPU.ID_EX.Branch_o    = 1'b0;
+    CPU.ID_EX.last_flush_o = 1'b0;
+    CPU.ID_EX.pc_o        = 32'b0;
+    CPU.ID_EX.target_PC_o = 32'b0;
 
     // EX/MEM
     CPU.EX_MEM.ALUres_o     = 32'b0;
@@ -225,7 +229,8 @@ ALU ALU(
     .data1_i(ForwardAdata_o),
     .data2_i(ALUdata_i),
     .ALUCtrl_i(ALUCtrl_o),
-    .data_o(ALUdata_o)
+    .data_o(ALUdata_o),
+    .Zero_o() // 1, omitted without beq
 );
 
 ALU_Control ALU_Control(
@@ -265,7 +270,7 @@ ID_EX ID_EX(
     .flush(EX_BEQ_flush),
 
     .pc_i(p0_pc_o),
-    .target_PC_i(p0_pc_o + ((ID_ImmGen_toRegIDEX) << 1)),
+    .target_PC_i(p0_pc_o + ((imm32_o) << 1)),
     .Branch_i(Branch_o),
     .last_flush_i(Branch_o && predictor),
     .ALUOp_i(ALUOp_o),
@@ -379,14 +384,14 @@ Hazard_Detection Hazard_Detection(
 
 MUX32 PC_ID_Branching(
     .data1_i(adder_pc_o),
-    .data2_i(p0_pc_o + ((ID_ImmGen_toRegIDEX) << 1)),
+    .data2_i(p0_pc_o + ((imm32_o) << 1)),
     .select_i(Branch_o && predictor),
     .data_o(PC_ID_BranchingTarget)
 );
 
 MUX32 PC_EX_Branching(
     .data1_i(PC_ID_BranchingTarget),
-    .data2_i((EX_ALU_toRegEXMEM == 0) ? EX_TargetPC : EX_pc + 4),
+    .data2_i((ALUdata_o == 0) ? EX_TargetPC : EX_pc + 4),
     .select_i(EX_BEQ_flush),
     .data_o(IF_pc_mux_i)
 );
@@ -396,7 +401,7 @@ branch_predictor branch_predictor
     .clk_i(clk_i), 
     .rst_i(rst_i),
     .update_i(Branch_o), // Update only for branch instructions
-    .result_i(EX_ALU_toRegEXMEM == 0), 
+    .result_i(ALUdata_o == 0), 
     .predict_o(predictor)
 );
 
