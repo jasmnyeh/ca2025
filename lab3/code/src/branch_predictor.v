@@ -27,8 +27,8 @@ always @(*) begin
     endcase
 end
 
-always @(posedge clk_i or posedge rst_i) begin
-    if (rst_i) begin
+always @(posedge clk_i or negedge rst_i) begin
+    if (~rst_i) begin
         history <= 2'b11; // start with strongly taken
     end
     else if (Branch_i) begin // if a branch instruction is executed
